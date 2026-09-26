@@ -16,3 +16,10 @@ Ogni volta che si aggiorna il ramo `main`, GitHub Actions compila l'app (file `.
 - `www/vendor/` — font locali (Alegreya, Alegreya Sans).
 - `android/` — progetto Android generato da Capacitor 6.
 - `android/app/formeselvatiche.keystore` — chiave di firma: serve per installare gli aggiornamenti sopra la versione precedente. Non cancellarla.
+
+# Forme Selvatiche per Windows
+Nella pagina **Releases** ci sono anche le versioni `win-1.0.N` con due file:
+- `FormeSelvatiche-…-portatile.exe` — si avvia con un doppio clic, senza installazione.
+- `FormeSelvatiche-…-installazione.exe` — installa l'app con collegamento nel menu Start.
+
+Al primo avvio Windows può mostrare "PC protetto" (l'app non ha una firma a pagamento): scegli **Ulteriori informazioni → Esegui comunque**. La compilazione è in `.github/workflows/windows.yml` e usa Electron (cartella `desktop/`).
