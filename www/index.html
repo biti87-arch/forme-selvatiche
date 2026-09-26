@@ -262,19 +262,27 @@ const CARS=["For","Des","Cos","Int","Sag","Car"];
 const mod=s=>Math.floor(((+s||0)-10)/2);
 const sg=n=>(n>=0?"+":"−")+Math.abs(n);
 const mNum=n=>String(n).replace(".",",");
+const multiL=pg=>(pg.multi||[]).reduce((s,m)=>s+(+m.livello||0),0);
+const totL=pg=>(+pg.livello||0)+multiL(pg);
+const totBAB=pg=>bab(pg.classe,pg.livello)+(pg.multi||[]).reduce((s,m)=>s+(+m.bab||0),0);
+const shapeL=pg=>pg.fFoc?Math.min(pg.livello+4,totL(pg)):pg.livello;
+function withBuffs(pg){const on=(pg.buff||[]).filter(b=>b.on);if(!on.length)return pg;
+  const s=k=>on.reduce((a,b)=>a+(+b[k]||0),0);
+  return {...pg,bonus:{...pg.bonus,txc:(+pg.bonus.txc||0)+s("txc"),danni:(+pg.bonus.danni||0)+s("danni"),tsTem:(+pg.bonus.tsTem||0)+s("tem"),tsRif:(+pg.bonus.tsRif||0)+s("rif"),tsVol:(+pg.bonus.tsVol||0)+s("vol"),iniz:(+pg.bonus.iniz||0)+s("iniz")},
+    ca:{...pg.ca,altro:(+pg.ca.altro||0)+s("ca")},_buffPF:s("pf"),_buffOn:on.map(b=>b.nome||"Bonus")}}
 function bab(c,L){return c==="druido"?Math.floor(L*3/4):L}
 const good=L=>2+Math.floor(L/2), poor=L=>Math.floor(L/3);
 function saves(c,L){return c==="druido"?{tem:good(L),rif:poor(L),vol:good(L)}:{tem:good(L),rif:good(L),vol:poor(L)}}
 const babAttacks=b=>b<1?1:1+Math.floor((b-1)/5);
 function iter(b){const a=[b];let x=b-5;while(x>0&&a.length<4){a.push(x);x-=5}return a}
 
-function effDruid(pg){const L=pg.livello;
+function effDruid(pg){const L=shapeL(pg);
   if(pg.archetipo==="montagne")return L>=6?L-2:0;
   if(pg.archetipo==="urbano")return L>=5?L-1:0;
   return L>=4?L:0}
 
 function shapeInfo(pg){
-  const L=pg.livello;
+  const L=shapeL(pg);
   if(pg.classe==="druido"){
     const e=effDruid(pg), start=pg.archetipo==="montagne"?6:pg.archetipo==="urbano"?5:4;
     if(!e) return {ok:false,txt:`Forma selvatica dal ${start}° livello.`};
@@ -301,7 +309,7 @@ function shapeInfo(pg){
 function isFlyer(f){return f.cat==="Volanti"}
 function access(pg,f,size){
   const row=f.attacchi[size]; if(!row) return null;
-  const L=pg.livello;
+  const L=shapeL(pg);
   if(pg.classe==="druido"){
     if(f.vol==="draconiche") return null;
     if(f.vol==="giganti"){if(pg.archetipo!=="montagne"||size!==f.native)return null;const need={Grande:12,Enorme:16}[size];if(!need)return null;return {ok:L>=need,req:need+"°"}}
@@ -430,7 +438,7 @@ function lvlTxt(s,pg,dM,so){const L=pg.livello;dM=dM||{};
   s=s.replace(/2d6, \+1d6 ogni 4 livelli/g,m=>`${m} (ora ${2+Math.max(0,Math.floor((L-8)/4))}d6)`);
   s=s.replace(/6d6\+6, \+1d6\+1 ogni 2 livelli/g,m=>{const n=6+Math.max(0,Math.floor((L-12)/2));return `${m} (ora ${n}d6+${n})`});
   const AB={Cos:"Cos",For:"For",Des:"Des",Sag:"Sag",Car:"Car",Int:"Int"};
-  s=s.replace(/CD 10\+½DV\+mod\.(Cos|For|Des|Sag|Car|Int)/g,(m,k)=>`${m} (${10+Math.floor(L/2)+mod(effCar(pg,AB[k]))+(dM[k]||0)})`);
+  s=s.replace(/CD 10\+½DV\+mod\.(Cos|For|Des|Sag|Car|Int)/g,(m,k)=>`${m} (${10+Math.floor(totL(pg)/2)+mod(effCar(pg,AB[k]))+(dM[k]||0)})`);
   s=s.replace(/CD 10 \+ metà livello di morfico \+ bonus di (Costituzione|Forza|Destrezza|Saggezza|Carisma|Intelligenza)/g,(m,k)=>`${m} (${10+Math.floor(L/2)+mod(effCar(pg,FULL[k]))+(dM[FULL[k]]||0)})`);
   s=s.replace(/CD 15 \+ metà livello di morfico/g,m=>`${m} (${15+Math.floor(L/2)})`);
   return s}
@@ -472,7 +480,7 @@ function buildAttacks(pg,alt,T,opts){
         f.tags.push("+ "+e.nome);
       } else list.push(ev);
     });
-    const lim=babAttacks(bab(cls,L))+1;
+    const lim=babAttacks(totBAB(pg))+1;
     if(evoN>lim) notes.push(`Le evoluzioni concedono ${evoN} attacchi naturali: il limite al ${L}° livello è ${lim} (attacchi del BAB + 1). Scegli quali usare.`);
     if(evoActive(pg).some(e=>e.id===27)&&pg.archetipo==="nexus") notes.push("Zanne velenose non funziona per il nexus: un corpo elementale non ha ghiandole velenifere.");
     else if(evoActive(pg).some(e=>e.id===27)){
@@ -485,7 +493,7 @@ function buildAttacks(pg,alt,T,opts){
     list.forEach(a=>{if(a.dice)a.extra.push(`${n}d6 [${(pg.affinita||"fuoco").toUpperCase()}]`);a.tags.push("Forma primeva")})}
   const dmgCount=list.filter(a=>a.dice&&!a.noroll).reduce((s,a)=>s+a.n,0);
   const single=dmgCount===1;
-  const B=bab(cls,L), sm=mod(effCar(pg,"For")), am=opts.acc?mod(effCar(pg,"Des")):sm, ex=+pg.bonus.txc||0, exd=+pg.bonus.danni||0;
+  const B=totBAB(pg), sm=mod(effCar(pg,"For")), am=opts.acc?mod(effCar(pg,"Des")):sm, ex=+pg.bonus.txc||0, exd=+pg.bonus.danni||0;
   const out=list.map(a=>{
     const tx=B+am+(T?T.txc:0)+ex-(a.sec?5:0)+(opts.human?(opts.szM||0):0);
     let dmg=null, detail=[];
@@ -523,6 +531,7 @@ function sizeVal(list,size){const e=(list||[]).find(x=>x.sizes&&x.sizes.includes
 
 /* ------------------------------------------------------------ calcolo scheda */
 function computeSheet(pg,ref){
+  pg=withBuffs(pg);const TL=totL(pg);
   const L=pg.livello, cls=pg.classe, human=ref.kind==="naturale";
   const f=human?null:FORME.find(x=>x.nome===ref.nome);
   const size=human?pg.taglia:ref.taglia;
@@ -544,14 +553,14 @@ function computeSheet(pg,ref){
   const E=k=>effCar(pg,k);
   const For=mod(E("For")),Des=mod(E("Des")),Cos=mod(E("Cos")),Sag=mod(E("Sag"));
   const dM={For:T?T.dmul:0,Des:T?T.cades:0,Cos:T?T.pf||0:0};
-  const B=bab(cls,L), S=saves(cls,L);
+  const B=totBAB(pg), S0=saves(cls,L), S={tem:S0.tem,rif:S0.rif,vol:S0.vol};(pg.multi||[]).forEach(m=>{S.tem+=+m.tem||0;S.rif+=+m.rif||0;S.vol+=+m.vol||0});
   const armor=+pg.arm.bonus||0, selv=!!pg.arm.selvatica;
   const gigF=!human&&f.vol==="giganti";
   const armorOn=(human||gigF)?armor:(selv?armor:0);
   const maxD=pg.arm.maxDes===""||pg.arm.maxDes==null?null:+pg.arm.maxDes;
   let desAC=Des; if(armorOn&&maxD!=null)desAC=Math.min(desAC,maxD);
   const shield=+pg.ca.scudo||0, shieldOn=(human||gigF)?shield:(pg.arm.scudoSelv?shield:0);
-  const hCA=heroCA(L), hTS=heroTS(L);
+  const hCA=heroCA(TL), hTS=heroTS(TL);
   const ist=istinto(pg,armor>0||shield>0);
   const pelle=has(12)?1+(L>=8)+(L>=14)+(L>=20):0;
   const itemNat=+pg.ca.nat||0;
@@ -574,7 +583,7 @@ function computeSheet(pg,ref){
   const bb=pg.bonus;
   const TS={tem:S.tem+Cos+(T?T.tem:0)+(+bb.tsTem||0)+hTS,rif:S.rif+Des+(T?T.rifl:0)+(+bb.tsRif||0)+hTS,vol:S.vol+Sag+(+bb.tsVol||0)+hTS};
   const iniz=Des+dM.Des+(+pg.bonus.iniz||0)+P.iniz+(has(5)?3:0);
-  const pfExtra=(mod(E("Cos"))-mod(+pg.car.Cos||10))*L+(T?T.pf*L:0);
+  const pfExtra=(mod(E("Cos"))-mod(+pg.car.Cos||10))*TL+(T?T.pf*TL:0);
   const pfNote=[(mod(E("Cos"))-mod(+pg.car.Cos||10))?`${sg((mod(E("Cos"))-mod(+pg.car.Cos||10))*L)} Cos degli aspetti`:null,T&&T.pf?`${sg(T.pf*L)} taglia`:null].filter(Boolean).join(", ");
   // velocità
   const rapid=has(6)?(L>=14?6:L>=8?3:1.5):0;
@@ -614,7 +623,7 @@ function computeSheet(pg,ref){
     const nex=pg.archetipo==="nexus"||pg.archetipo==="jotun";
     const base=nex?[{n:1,name:"Colpo senz'armi",dice:wScale(pg.taglia==="Piccola"?"1d2":"1d3",enl?1:0),str:1,sec:false,crit:null,extra:[]}]:[{n:2,name:nm,dice:morphDice(L),str:1,sec:false,crit:L>=15?"×3":null,extra:cri?["perforanti o contundenti"]:[]}];
     const r=buildAttacks(pg,base,null,{human:true,szM});
-    if(nex){const u=r.out[0];u.iter=iter(u.tx).slice(0,babAttacks(bab(cls,L)));u.tags=pg.archetipo==="jotun"?[]:["Colpo Senz'Armi Migliorato"]}
+    if(nex){const u=r.out[0];u.iter=iter(u.tx).slice(0,babAttacks(totBAB(pg)));u.tags=pg.archetipo==="jotun"?[]:["Colpo Senz'Armi Migliorato"]}
     r.out.forEach(a=>{if(a.name===nm)a.tags=["armi morfiche"+(arb?" (Colpi potenti)":cri?" (Chele chitinose)":"")]});
     routines=[r.out];atkNotes=r.notes;
   } else {
@@ -655,7 +664,7 @@ function computeSheet(pg,ref){
     energ=`Attacco energetico (azione veloce, fino al tuo prossimo turno): +${1+Math.floor(L/4)}d6 di acido, elettricità, freddo o fuoco a ogni attacco naturale e colpo senz'armi.`;
   }
   // soffio draconico
-  let soffio=null;const cdS=10+Math.floor(L/2)+Cos+dM.Cos;
+  let soffio=null;const cdS=10+Math.floor((f?TL:L)/2)+Cos+dM.Cos;
   if(f&&f.vol==="draconiche"){const b=f.soffio,tg=b.taglie[size];const n=Math.min(16,Math.max(tg.dadi,L-4));
     soffio={forma:b.forma,energia:b.energia,dado:b.dado,n,area:tg.area,usi:tg.usi,cd:cdS,fonte:null};
     if(pg.archetipo==="tiamath"&&L<20&&size==="Enorme")soffio=null}
@@ -682,7 +691,7 @@ function computeSheet(pg,ref){
     return {...c,on}});
   const magia=(cls==="druido"||pg.archetipo==="nexus"||pg.archetipo==="jotun")?(L>=8&&!human?"Attacchi naturali magici (dall'8° livello)":null):`Attacchi naturali: ${morphProps(L).join(", ")}`;
   CUR_ENL=false;
-  return {enl,hSz,soffio,difese,tiaRes,dM,Des,f,size,T,human,CA,touch,flat,caCalc,BMC,DMC,TS,iniz,pfExtra,pfNote,dist,energ,speed:speedStr(spParts),sensi,skills,routines,atkNotes,furia,caps,magia,
+  return {TL,pfTemp:(+pg.pfTemp||0)+(pg._buffPF||0),buffOn:pg._buffOn||[],enl,hSz,soffio,difese,tiaRes,dM,Des,f,size,T,human,CA,touch,flat,caCalc,BMC,DMC,TS,iniz,pfExtra,pfNote,dist,energ,speed:speedStr(spParts),sensi,skills,routines,atkNotes,furia,caps,magia,
     aspAct,P,evos,For,Des,Cos,B,
     spazio:human?(enl?(hSz==='Grande'?'3 m':'1,5 m'):null):f.attacchi[size].spazio,portata:human?(enl?(hSz==='Grande'?'3 m':'1,5 m'):null):f.attacchi[size].portata};
 }
@@ -763,21 +772,42 @@ function renderTabs(){
 }
 function num(id,label,val,attrs=""){return `<div class="field"><label for="${id}">${label}</label><input type="number" inputmode="numeric" id="${id}" value="${val??""}" ${attrs}></div>`}
 function renderPG(){
-  const p=pg(), L=p.livello, B=bab(p.classe,L), S=saves(p.classe,L), si=shapeInfo(p);
+  const p=pg(), L=p.livello, TLp=totL(p), B=totBAB(p), S=saves(p.classe,L), si=shapeInfo(p);(p.multi||[]).forEach(m=>{S.tem+=+m.tem||0;S.rif+=+m.rif||0;S.vol+=+m.vol||0});
   const arch=ARCHETIPI[p.classe].map(([v,t])=>`<option value="${v}"${p.archetipo===v?" selected":""}>${t}</option>`).join("");
   $("p-pg").innerHTML=`
   <div class="box">
     <h2>Personaggio</h2>
     <div class="grid">
       <div class="field" style="grid-column:1/-1"><label for="f-nome">Nome</label><input type="text" id="f-nome" value="${esc(p.nome)}"></div>
-      <div class="field"><label for="f-liv">Livello</label><div class="stepper"><button type="button" id="liv-m" aria-label="Livello meno">−</button><input type="number" id="f-liv" min="1" max="20" value="${L}"><button type="button" id="liv-p" aria-label="Livello più">+</button></div></div>
+      <div class="field"><label for="f-liv">Livello da ${p.classe==="druido"?"druido":"morfico"}</label><div class="stepper"><button type="button" id="liv-m" aria-label="Livello meno">−</button><input type="number" id="f-liv" min="1" max="20" value="${L}"><button type="button" id="liv-p" aria-label="Livello più">+</button></div></div>
       <div class="field"><label for="f-arch">Archetipo</label><select id="f-arch">${arch}</select></div>
       ${p.classe==="druido"&&p.archetipo==="elementalista"?`<div class="field"><label for="f-aff">Affinità elementale</label><select id="f-aff">${["acido","elettricità","freddo","fuoco"].map(v=>`<option${(p.affinita||"fuoco")===v?" selected":""}>${v}</option>`).join("")}</select></div>`:""}
       <div class="field"><label for="f-tg">Taglia del personaggio</label><select id="f-tg"><option${p.taglia==="Media"?" selected":""}>Media</option><option${p.taglia==="Piccola"?" selected":""}>Piccola</option></select></div>
     </div>
-    <p class="hint" style="margin-top:10px">${esc(si.txt)}</p>
-    <div class="derived" style="margin-top:6px"><span>BAB <b>${sg(B)}</b></span><span>Tempra <b>${sg(S.tem)}</b></span><span>Riflessi <b>${sg(S.rif)}</b></span><span>Volontà <b>${sg(S.vol)}</b></span><span>(bonus base di classe)</span></div>
-    <div class="derived" style="margin-top:4px"><span>Bonus eroico: TS <b>${sg(heroTS(L))}</b></span><span>CA e DMC <b>${sg(heroCA(L))}</b></span><span>(già inclusi nella scheda)</span></div>
+    <label class="check" style="margin-top:10px"><input type="checkbox" id="f-foc"${p.fFoc?" checked":""}> Talento <b>Forme Focalizzate</b> <span class="muted">(forma selvatica calcolata come con 4 livelli di classe in più, fino al livello del personaggio)</span></label>
+    <p class="hint" style="margin-top:10px">${esc(si.txt)}${p.fFoc&&shapeL(p)!==p.livello?` · livello per le forme ${shapeL(p)}°`:""}</p>
+    <div class="derived" style="margin-top:6px"><span>BAB <b>${sg(B)}</b></span><span>Tempra <b>${sg(S.tem)}</b></span><span>Riflessi <b>${sg(S.rif)}</b></span><span>Volontà <b>${sg(S.vol)}</b></span><span>(${(p.multi||[]).length?`totali, livello del personaggio ${TLp}°`:"bonus base di classe"})</span></div>
+    <div class="derived" style="margin-top:4px"><span>Bonus eroico: TS <b>${sg(heroTS(TLp))}</b></span><span>CA e DMC <b>${sg(heroCA(TLp))}</b></span><span>(già inclusi nella scheda)</span></div>
+  </div>
+  <div class="box">
+    <h2>Altre classi</h2>
+    <p class="hint">Per i personaggi multiclasse: inserisci a mano livello, BAB e bonus base ai TS di ogni altra classe. Si sommano a quelli della classe principale; il livello del personaggio conta per i bonus eroici e per i Dadi Vita.</p>
+    ${(p.multi||[]).map((m,i)=>`<div class="mrow" style="border-top:1px solid var(--line,#ccc);padding-top:8px;margin-top:8px"><div class="grid">
+      <div class="field" style="grid-column:1/-1"><label for="m-nome-${i}">Classe</label><input type="text" id="m-nome-${i}" data-m="${i}" data-k="nome" value="${esc(m.nome||"")}" placeholder="es. Barbaro"></div>
+      ${["livello:Livello","bab:BAB","tem:Tempra","rif:Riflessi","vol:Volontà"].map(x=>{const [k,l]=x.split(":");return `<div class="field"><label for="m-${k}-${i}">${l}</label><input type="number" inputmode="numeric" id="m-${k}-${i}" data-m="${i}" data-k="${k}" value="${m[k]??""}"></div>`}).join("")}
+    </div><button type="button" class="btn" data-mdel="${i}" style="margin-top:6px">Rimuovi classe</button></div>`).join("")}
+    <button type="button" class="btn" id="m-add" style="margin-top:10px">+ Aggiungi classe</button>
+  </div>
+  <div class="box">
+    <h2>Bonus attivabili</h2>
+    <p class="hint">Effetti da attivare a comando (es. Ira del barbaro). Si accendono e spengono dalla scheda della forma con un tocco. Usa valori negativi per i malus. I PF vanno sempre tra i temporanei.</p>
+    ${(p.buff||[]).map((b,i)=>`<div class="mrow" style="border-top:1px solid var(--line,#ccc);padding-top:8px;margin-top:8px">
+      <label class="check"><input type="checkbox" data-bon="${i}"${b.on?" checked":""}> Attivo</label>
+      <div class="grid" style="margin-top:6px">
+      <div class="field" style="grid-column:1/-1"><label for="b-nome-${i}">Nome</label><input type="text" id="b-nome-${i}" data-b="${i}" data-k="nome" value="${esc(b.nome||"")}" placeholder="es. Ira"></div>
+      ${["txc:Tiro per colpire","danni:Danni","ca:CA","pf:PF temporanei","tem:Tempra","rif:Riflessi","vol:Volontà","iniz:Iniziativa"].map(x=>{const [k,l]=x.split(":");return `<div class="field"><label for="b-${k}-${i}">${l}</label><input type="number" inputmode="numeric" id="b-${k}-${i}" data-b="${i}" data-k="${k}" value="${b[k]??""}"></div>`}).join("")}
+    </div><button type="button" class="btn" data-bdel="${i}" style="margin-top:6px">Rimuovi bonus</button></div>`).join("")}
+    <button type="button" class="btn" id="b-add" style="margin-top:10px">+ Aggiungi bonus</button>
   </div>
   <div class="box">
     <h2>Caratteristiche</h2>
@@ -822,7 +852,8 @@ function renderPG(){
   <div class="box">
     <h2>Altri valori</h2>
     <div class="grid">
-      ${num("f-pf","Punti Ferita massimi",p.pf)}
+      ${num("f-pf","PF totali (Ferita + Fatica)",p.pf)}
+      ${num("f-pft","PF temporanei",p.pfTemp)}
       ${num("b-tem","Bonus Tempra",p.bonus.tsTem)}
       ${num("b-rif","Bonus Riflessi",p.bonus.tsRif)}
       ${num("b-vol","Bonus Volontà",p.bonus.tsVol)}
@@ -857,10 +888,18 @@ function bindPG(){
   on("f-aff","change",e=>{setv("affinita",e.target.value);renderSoft()});
   CARS.forEach(k=>on("c-"+k,"input",e=>{setv("car."+k,+e.target.value||0);$("m-"+k).textContent=sg(mod(+e.target.value||0));renderSoft()}));
   ["For","Des","Cos"].forEach(k=>on("ip-"+k,"input",e=>{setv("itemPot."+k,+e.target.value||0);renderSoft()}));
-  const map={"a-bon":"arm.bonus","ca-dev":"ca.dev","ca-sch":"ca.sch","ca-nat":"ca.nat","ca-alt":"ca.altro","f-pf":"pf","b-tem":"bonus.tsTem","b-rif":"bonus.tsRif","b-vol":"bonus.tsVol","ca-scu":"ca.scudo","b-txc":"bonus.txc","b-dan":"bonus.danni","b-ini":"bonus.iniz","f-vel":"vel"};
+  const map={"a-bon":"arm.bonus","ca-dev":"ca.dev","ca-sch":"ca.sch","ca-nat":"ca.nat","ca-alt":"ca.altro","f-pf":"pf","f-pft":"pfTemp","b-tem":"bonus.tsTem","b-rif":"bonus.tsRif","b-vol":"bonus.tsVol","ca-scu":"ca.scudo","b-txc":"bonus.txc","b-dan":"bonus.danni","b-ini":"bonus.iniz","f-vel":"vel"};
   for(const id in map)on(id,"input",e=>{setv(map[id],e.target.value===""?"":+e.target.value);renderSoft()});
   on("a-max","input",e=>{setv("arm.maxDes",e.target.value===""?"":+e.target.value);renderSoft()});
   on("a-selv","change",e=>{setv("arm.selvatica",e.target.checked);renderSoft()});
+  on("f-foc","change",e=>{setv("fFoc",e.target.checked);renderAll()});
+  on("m-add","click",()=>{(p.multi=p.multi||[]).push({nome:"",livello:1,bab:0,tem:0,rif:0,vol:0});save();renderAll()});
+  on("b-add","click",()=>{(p.buff=p.buff||[]).push({nome:"",on:false});save();renderAll()});
+  $("p-pg").querySelectorAll("[data-m]").forEach(el=>el.addEventListener("change",()=>{const m=p.multi[+el.dataset.m],k=el.dataset.k;m[k]=k==="nome"?el.value:(el.value===""?"":+el.value);save();renderAll()}));
+  $("p-pg").querySelectorAll("[data-b]").forEach(el=>el.addEventListener("change",()=>{const b=p.buff[+el.dataset.b],k=el.dataset.k;b[k]=k==="nome"?el.value:(el.value===""?"":+el.value);save();renderSoft()}));
+  $("p-pg").querySelectorAll("[data-bon]").forEach(el=>el.addEventListener("change",()=>{p.buff[+el.dataset.bon].on=el.checked;save();renderSoft()}));
+  $("p-pg").querySelectorAll("[data-mdel]").forEach(el=>el.addEventListener("click",()=>{p.multi.splice(+el.dataset.mdel,1);save();renderAll()}));
+  $("p-pg").querySelectorAll("[data-bdel]").forEach(el=>el.addEventListener("click",()=>{p.buff.splice(+el.dataset.bdel,1);save();renderAll()}));
   if(!p.arma)p.arma={};
   [["w-nome","nome"],["w-dado","dado"],["w-crit","crit"],["w-nome2","nome2"],["w-dado2","dado2"],["w-crit2","crit2"]].forEach(([id,k])=>on(id,"input",e=>{p.arma[k]=e.target.value;save();renderSoft()}));
   [["w-bon","bonus"],["w-bon2","bonus2"]].forEach(([id,k])=>on(id,"input",e=>{p.arma[k]=+e.target.value||0;save();renderSoft()}));
@@ -996,13 +1035,14 @@ function renderScheda(){
     ${sizeChips}
     ${f?`<p class="intro">${rich(f.intro)}</p>`:""}
   </div>
+  ${(p.buff||[]).length?`<div class="chips buffs" style="margin:0 0 10px">${p.buff.map((b,i)=>`<button type="button" class="chip${b.on?" sel":""}" data-buff="${i}" aria-pressed="${!!b.on}">${b.on?"✓ ":""}${esc(b.nome||"Bonus")}</button>`).join("")}</div>`:""}
   <div class="stats">
     <div class="stat"><div class="k">CA</div><div class="v">${R.CA}</div><div class="s">contatto ${R.touch} · ${(f&&f.nome==="Etere")||R.aspAct.includes(312)?"Sempre pronto: mai colto alla sprovvista":"sprovvista "+R.flat}</div></div>
-    <div class="stat"><div class="k">Punti Ferita</div><div class="v">${pfBase?pfBase+R.pfExtra:"—"}</div><div class="s">${R.pfExtra?esc(R.pfNote):(pfBase?"invariati":"inseriscili in Personaggio")}</div></div>
+    <div class="stat"><div class="k">Punti Ferita · Fatica</div><div class="v">${pfBase?`${Math.ceil((pfBase+R.pfExtra)/2)} · ${Math.floor((pfBase+R.pfExtra)/2)}`:"—"}</div><div class="s">${pfBase?`totale ${pfBase+R.pfExtra}${R.pfExtra?" ("+esc(R.pfNote)+")":" (invariati)"}`:"inseriscili in Personaggio"}${R.pfTemp?` · <b>temporanei +${R.pfTemp}</b>`:""}</div></div>
     <div class="stat"><div class="k">Iniziativa</div><div class="v">${sg(R.iniz)}</div><div class="s">BAB ${sg(R.B)}${R.dM.Des?` · Des forma ${sg(R.dM.Des)}`:""}</div></div>
     <div class="stat"><div class="k">BMC · DMC</div><div class="v">${sg(R.BMC)} · ${R.DMC}</div><div class="s">manovre</div></div>
   </div>
-  ${heroTS(L)||heroCA(L)?`<p class="hint" style="margin:-6px 0 0">Inclusi i bonus eroici: TS ${sg(heroTS(L))}${heroCA(L)?`, CA e DMC ${sg(heroCA(L))}`:""}.</p>`:""}
+  ${heroTS(R.TL)||heroCA(R.TL)?`<p class="hint" style="margin:-6px 0 0">Inclusi i bonus eroici (livello del personaggio ${R.TL}°): TS ${sg(heroTS(R.TL))}${heroCA(R.TL)?`, CA e DMC ${sg(heroCA(R.TL))}`:""}.</p>`:""}
   <div class="stats three">
     <div class="stat"><div class="k">Tempra</div><div class="v">${sg(R.TS.tem)}</div></div>
     <div class="stat"><div class="k">Riflessi</div><div class="v">${sg(R.TS.rif)}</div></div>
@@ -1047,6 +1087,7 @@ function renderScheda(){
     ${R.T&&(R.dM.For||R.dM.Des||R.dM.Cos)?`<div><b>Modificatori di caratteristica della forma</b>: For ${sg(R.dM.For)}, Des ${sg(R.dM.Des)}, Cos ${sg(R.dM.Cos)} (già inclusi nella tabella; applicati anche a Iniziativa e CD)</div>`:""}
     ${p.classe==="morfico"?`<div><b>Caratteristiche in uso</b>: For ${effCar(p,"For")}, Des ${effCar(p,"Des")}, Cos ${effCar(p,"Cos")}</div>`:""}
   </div></details></div>`;
+  el.querySelectorAll("[data-buff]").forEach(b=>b.addEventListener("click",()=>{const x=p.buff[+b.dataset.buff];x.on=!x.on;save();renderScheda()}));
   const je=$("j-enl");if(je)je.addEventListener("change",e=>{p.jEnl=e.target.checked;save();renderScheda()});
   el.querySelectorAll("[data-sz]").forEach(b=>b.addEventListener("click",()=>{p.vista={kind:"animale",nome:f.nome,taglia:b.dataset.sz};save();renderScheda();renderForme()}));
 }
