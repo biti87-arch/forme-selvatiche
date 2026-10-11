@@ -637,7 +637,7 @@ function computeSheet(pg,ref){
   } else {
     f.attacchi[size].alts.forEach(alt=>{const r=buildAttacks(pg,alt,T,{acc:!!f.accurata,vol:f.vol});routines.push(r.out);atkNotes.push(...r.notes)});
   }
-  if(pg._paG){const g=pg._paG;atkNotes.push(`Attacco Poderoso grado ${g}: −${g} ai tiri per colpire in mischia e alle manovre, +${2*g} ai danni in mischia (+${3*g} a due mani o con attacco naturale primario a 1½ For, +${g} con mano secondaria o attacco naturale secondario; nulla su attacchi di contatto). Già applicato.`)}
+  if(pg._paG){const g=pg._paG;atkNotes.push(`Attacco Poderoso grado ${g}: −${g} ai tiri per colpire e alle manovre, +${2*g} ai danni in mischia e negli attacchi a distanza che sommano la Forza (+${3*g} a due mani o con 1½ For, +${g} con mano secondaria o attacco naturale secondario; nulla su attacchi di contatto). Già applicato.`)}
   atkNotes=[...new Set(atkNotes)];
   // arma impugnata (forme di gigante, jotun)
   const w=pg.arma||{};
@@ -662,8 +662,9 @@ function computeSheet(pg,ref){
   if(enl) atkNotes.push(`Ingrandito dalla forma minore (come Ingrandire Persone): taglia ${hSz}, +2 For e −2 Des già applicati a TxC, danni, CA, BMC, DMC e TS; arma e colpo senz'armi di una taglia superiore.`);
   // attacchi a distanza (vegetali)
   const dist=human?[]:(f.attacchi[size].dist||[]).map(a=>{
-    const tx=B+Des+T.txcd+(+pg.bonus.txc||0);let dmg=null,detail=[];
-    if(a.dice){const sp=strDmg(For,a.str),sz=a.str?T.dsin:0,ex2=a.str?(+pg.bonus.danni||0):0,tot=sp+sz+ex2;
+    const g=(a.dice&&a.str&&!a.touch)?(pg._paG||0):0, paD=g?(a.str===1.5?3*g:a.str===0.5?g:2*g):0;
+    const tx=B+Des+T.txcd+(+pg.bonus.txc||0)-g;let dmg=null,detail=[];
+    if(a.dice){const sp=strDmg(For,a.str),sz=a.str?T.dsin:0,ex2=a.str?(+pg.bonus.danni||0):0,tot=sp+sz+ex2+paD;
       dmg=a.dice+(tot?sg(tot).replace("−","-"):"");detail=a.str?[`${a.str===1.5?"1½":""}For ${sg(sp)}`,`Dan. Sin. ${sg(sz)}`]:["nessun modificatore di Forza"]}
     return {...a,tx,dmg,detail,tags:[]}});
   // nexus: onda energetica e attacco energetico
